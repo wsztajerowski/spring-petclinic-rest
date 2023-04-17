@@ -16,6 +16,7 @@
 
 package org.springframework.samples.petclinic.rest.controller;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.samples.petclinic.mapper.PetMapper;
@@ -27,6 +28,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.transaction.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -68,6 +71,14 @@ public class PetRestController implements PetsApi {
         return new ResponseEntity<>(pets, HttpStatus.OK);
     }
 
+    @Override
+    public ResponseEntity<PetDto> addPet(PetDto petDto) {
+        Pet pet = petMapper.toPet(petDto);
+        this.clinicService.savePet(pet);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setLocation(UriComponentsBuilder.newInstance().path("/api/pets/{id}").buildAndExpand(pet.getId()).toUri());
+        return new ResponseEntity<>(petMapper.toPetDto(pet), headers, HttpStatus.CREATED);
+    }
 
     @PreAuthorize("hasRole(@roles.OWNER_ADMIN)")
     @Override
