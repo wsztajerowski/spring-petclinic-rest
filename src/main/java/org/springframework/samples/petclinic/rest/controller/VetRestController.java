@@ -15,6 +15,8 @@
  */
 package org.springframework.samples.petclinic.rest.controller;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +33,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.transaction.Transactional;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Vitaliy Fedoriv
@@ -41,12 +45,23 @@ import java.util.List;
 @CrossOrigin(exposedHeaders = "errors, content-type")
 @RequestMapping("api")
 public class VetRestController implements VetsApi {
+    private Map<String, Counter> metricCounters = null;
+    private MeterRegistry meterRegistry;
+
+    private Counter getCounter(String speciality) {
+        return metricCounters.computeIfAbsent(speciality, spec -> Counter.builder("vets.by.speciality")
+            .tag("speciality", spec)
+            .description("Number of Vets registered by speciality")
+            .register(meterRegistry));
+    }
 
     private final ClinicService clinicService;
     private final VetMapper vetMapper;
     private final SpecialtyMapper specialtyMapper;
 
-    public VetRestController(ClinicService clinicService, VetMapper vetMapper, SpecialtyMapper specialtyMapper) {
+    public VetRestController(MeterRegistry meterRegistry, ClinicService clinicService, VetMapper vetMapper, SpecialtyMapper specialtyMapper) {
+        this.meterRegistry = meterRegistry;
+        this.metricCounters = new HashMap<String, Counter>();
         this.clinicService = clinicService;
         this.vetMapper = vetMapper;
         this.specialtyMapper = specialtyMapper;
@@ -79,6 +94,8 @@ public class VetRestController implements VetsApi {
         HttpHeaders headers = new HttpHeaders();
         Vet vet = vetMapper.toVet(vetDto);
         this.clinicService.saveVet(vet);
+        vetDto.getSpecialties()
+                .forEach( s -> getCounter(s.getName()).increment());
         headers.setLocation(UriComponentsBuilder.newInstance().path("/api/vets/{id}").buildAndExpand(vet.getId()).toUri());
         return new ResponseEntity<>(vetMapper.toVetDto(vet), headers, HttpStatus.CREATED);
     }
